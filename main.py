@@ -3,12 +3,12 @@ import pybullet as p
 import pybullet_data
 import time
 import numpy as np
-from keyboard import get_keyboard_input, print_controls
+from keyboard import get_keyboard_input, print_controls, FlightState
 
 # Инициализация PyBullet
 physics_client = p.connect(p.GUI)
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
-p.setGravity(0, 0, 9.81)  # Отключаем гравитацию
+p.setGravity(0, 0, -9.81)  # Отключаем гравитацию
 p.loadURDF("plane.urdf")
 
 # Загружаем модель ракеты (вместо самолета)
@@ -24,6 +24,7 @@ rocket_mass = 1
 
 # Параметры управления ракетой
 plane_speed = 1.5
+flight_state = FlightState()
 
 # Хранение истории для вычисления производных
 history_size = 20  # Количество сохраняемых точек
@@ -117,53 +118,65 @@ def calculate_desired_velocity(rocket_pos, target_pos, base_speed=3.0):
         ]
     else:
         velocity = [0, 0, 0]
-    
+
     return velocity
 
 # Основной цикл симуляции
 try:
     while True:
         # 1. ЛОГИКА ДВИЖЕНИЯ САМОЛЕТА
-        plane_velocity = get_keyboard_input(speed=plane_speed)
+        direction = get_keyboard_input(flight_state)
+
+        plane_velocity = [
+            direction[0] * plane_speed,
+            direction[1] * plane_speed,
+            direction[2] * plane_speed
+        ]
         p.resetBaseVelocity(plane, linearVelocity=plane_velocity)
         
         # 2. ПОЛУЧЕНИЕ ПОЗИЦИЙ
         pos_rocket, _ = p.getBasePositionAndOrientation(rocket)
         pos_plane, _ = p.getBasePositionAndOrientation(plane)
-        
-        # 3. СОХРАНЕНИЕ ИСТОРИИ ДЛЯ ВЫЧИСЛЕНИЯ ПРОИЗВОДНЫХ
-        time_history.append(simulation_time)
-        pos_x_history.append(pos_rocket[0])
-        pos_y_history.append(pos_rocket[1])
-        pos_z_history.append(pos_rocket[2])
-        
-        # Ограничиваем размер истории
-        if len(time_history) > history_size:
-            time_history.pop(0)
-            pos_x_history.pop(0)
-            pos_y_history.pop(0)
-            pos_z_history.pop(0)
-        
-        # 4. ВЫЧИСЛЕНИЕ СИЛЫ ЧЕРЕЗ ВТОРУЮ ПРОИЗВОДНУЮ
-        force_x, force_y, force_z = calculate_force_from_trajectory(
-            pos_x_history, pos_y_history, pos_z_history, 
-            time_history, rocket_mass
+
+        # Направление к цели
+        direction_to_target = np.array(pos_plane) - np.array(pos_rocket)
+
+        distance = np.linalg.norm(direction_to_target)
+
+        if distance > 0.001:
+            direction_to_target = direction_to_target / distance
+
+        # Текущая скорость ракеты
+        current_velocity, _ = p.getBaseVelocity(rocket)
+        current_velocity = np.array(current_velocity)
+
+        # Желаемая скорость
+        target_speed = 3.0
+        desired_velocity = direction_to_target * target_speed
+
+        # Плавное наведение (сглаживание)
+        steering_strength = 0.08
+
+        new_velocity = (
+                current_velocity * (1.0 - steering_strength)
+                + desired_velocity * steering_strength
+        )
+
+        # Ограничение максимальной скорости
+        max_speed = 4.0
+
+        speed = np.linalg.norm(new_velocity)
+
+        if speed > max_speed:
+            new_velocity = new_velocity / speed * max_speed
+
+        # Устанавливаем новую скорость
+        p.resetBaseVelocity(
+            rocket,
+            linearVelocity=new_velocity.tolist()
         )
         
-        # Применяем силу к ракете (если сила не нулевая)
-        if abs(force_x) > 0.01 or abs(force_y) > 0.01 or abs(force_z) > 0.01:
-            # Применяем силу в центре масс ракеты
-            p.applyExternalForce(
-                rocket,           # ID объекта
-                -1,              # ссылочный фрейм (-1 = WORLD_FRAME)
-                [force_x, force_y, force_z],  # вектор силы
-                [0, 0, 0],       # точка приложения силы (центр масс)
-                p.WORLD_FRAME    # система координат
-            )
-        
         # 5. ДОПОЛНИТЕЛЬНО: устанавливаем желаемую скорость для наведения
-        desired_velocity = calculate_desired_velocity(pos_rocket, pos_plane, base_speed=3.0)
-        p.resetBaseVelocity(rocket, linearVelocity=desired_velocity)
         
         # 6. ПРОВЕРКА СТОЛКНОВЕНИЯ
         distance = ((pos_rocket[0] - pos_plane[0])**2 + 
@@ -178,14 +191,15 @@ try:
             break
         
         # 7. ВЫВОД ИНФОРМАЦИИ (каждые 50 шагов)
+        # 7. ВЫВОД ИНФОРМАЦИИ
         if step_count % 50 == 0:
-            force_magnitude = (force_x**2 + force_y**2 + force_z**2)**0.5
-            velocity_magnitude = (desired_velocity[0]**2 + desired_velocity[1]**2 + desired_velocity[2]**2)**0.5
-            
-            print(f"Время: {simulation_time:.2f}c | Дист: {distance:.2f}м | "
-                  f"Скорость: {velocity_magnitude:.2f} м/с | "
-                  f"Сила: {force_magnitude:.2f} Н | "
-                  f"Ускорение: {force_magnitude/rocket_mass:.2f} м/с²")
+            current_speed = np.linalg.norm(new_velocity)
+
+            print(
+                f"Время: {simulation_time:.2f}c | "
+                f"Дист: {distance:.2f}м | "
+                f"Скорость ракеты: {current_speed:.2f} м/с"
+            )
         
         # Шаг симуляции
         p.stepSimulation()
