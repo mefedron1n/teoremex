@@ -55,11 +55,12 @@ class FlightState:
         # Управление рысканием (yaw) - поворот влево/вправо
         # H = поворот влево (уменьшаем yaw, отрицательный)
         # K = поворот вправо (увеличиваем yaw, положительный)
+
         if ord('h') in keys and keys[ord('h')] & p.KEY_IS_DOWN:
-            self.yaw -= self.YAW_RATE
-        elif ord('k') in keys and keys[ord('k')] & p.KEY_IS_DOWN:
             self.yaw += self.YAW_RATE
-    
+        elif ord('k') in keys and keys[ord('k')] & p.KEY_IS_DOWN:
+            self.yaw -= self.YAW_RATE
+
     def get_direction_vector(self):
         """
         Преобразование углов в единичный вектор направления.
@@ -99,7 +100,7 @@ class FlightState:
         dz = 2 * (-(qy * qw - qx * qz))
 
         return [dx, dy, dz]
-    
+
     def get_display_angles(self):
         """
         Получение углов в градусах для отображения.
@@ -137,31 +138,31 @@ def get_keyboard_input(flight_state):
 
 def print_controls():
     """Вывод информации об управлении."""
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("УПРАВЛЕНИЕ САМОЛЕТОМ:")
-    print("="*50)
+    print("=" * 50)
     print("U - тангаж вверх (нос вверх, набор высоты)")
     print("J - тангаж вниз (нос вниз, снижение)")
     print("H - рыскание влево (поворот влево)")
     print("K - рыскание вправо (поворот вправо)")
-    print("-"*50)
+    print("-" * 50)
     print("Самолет летит с ПОСТОЯННОЙ скоростью.")
     print("Клавиши изменяют только направление (углы).")
-    print("-"*50)
+    print("-" * 50)
     print("Для выхода нажмите Ctrl+C")
-    print("="*50 + "\n")
+    print("=" * 50 + "\n")
 
 
 def get_simple_input(speed=2.0):
     """
     Альтернативное управление через WASD + Q/E.
-    
+
     Примечание: эта функция не используется в новой системе,
     но оставлена для совместимости.
-    
+
     Args:
         speed: скорость перемещения
-    
+
     Returns:
         list: вектор скорости [vx, vy, vz]
     """
@@ -186,9 +187,9 @@ def get_simple_input(speed=2.0):
 
 def print_simple_controls():
     """Вывод информации об управлении (WASD вариант)."""
-    print("\n" + "="*40)
+    print("\n" + "=" * 40)
     print("УПРАВЛЕНИЕ САМОЛЕТОМ (WASD + Q/E):")
-    print("="*40)
+    print("=" * 40)
     print("W/A/S/D - движение по X и Y")
     print("Q/E - движение вверх/вниз")
-    print("="*40 + "\n")
+    print("=" * 40 + "\n")
